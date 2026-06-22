@@ -1,0 +1,136 @@
+
+# 24/7 Infrastructure Monitoring & Alerting on AWS
+
+A real-time monitoring and alerting solution built on **Amazon CloudWatch** and **Amazon SNS**, designed to track the health of EC2 instances (and extendable to RDS/VPC) and notify the team immediately when something breaks.
+
+![Status](https://img.shields.io/badge/status-complete-brightgreen)
+![AWS](https://img.shields.io/badge/AWS-CloudWatch%20%7C%20SNS%20%7C%20EC2-orange)
+
+---
+
+## 📌 Project Overview
+
+| | |
+|---|---|
+| **Goal** | Continuous (24/7) visibility into infrastructure health, with automated alerting on threshold breaches |
+| **Core Services** | Amazon EC2, CloudWatch Agent, CloudWatch Metrics & Alarms, CloudWatch Dashboards, Amazon SNS |
+| **Monitored Metrics** | CPU Utilization, Memory Usage, Disk Usage, Network In/Out |
+| **Alert Channel** | Email (via SNS subscription) |
+| **Skill Level** | Beginner–Intermediate AWS Cloud Operations |
+
+---
+
+## 🏗️ Architecture
+
+```
+EC2 Instance
+     │
+     ▼  (CPU, network, disk-I/O — native metrics)
+     ▼  (memory, disk-space — via CloudWatch Agent)
+CloudWatch Metrics
+     │
+     ├──► CloudWatch Dashboards   (real-time visualization)
+     │
+     └──► CloudWatch Alarms       (threshold breach detection)
+                │
+                ▼
+          Amazon SNS Topic
+                │
+                ▼
+       Email Subscriber(s)
+```
+
+> **Note:** EC2 only reports CPU, network, and disk I/O metrics natively. Memory and disk-space usage require the **CloudWatch Agent** to be installed and configured on the instance — this is the first major step below.
+
+---
+
+## 🛠️ Step-by-Step Build Process
+
+### 1. Launch and Prepare the EC2 Instance
+- Launched an EC2 instance (Amazon Linux 2023).
+- Attached an IAM role with the `CloudWatchAgentServerPolicy` permission so the instance can push custom metrics to CloudWatch.
+
+### 2. Install the CloudWatch Agent
+```bash
+sudo yum install amazon-cloudwatch-agent -y
+```
+
+
+
+### 3. Run the CloudWatch Agent Configuration Wizard
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
+```
+Configured the wizard to collect:
+- CPU, memory, and disk metrics
+
+
+
+
+
+### 4. Fetch the Config and Start the Agent
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.toml
+```
+```bash
+sudo systemctl restart amazon-cloudwatch-agent
+sudo systemctl status amazon-cloudwatch-agent
+```
+
+
+
+### 5. Build a CloudWatch Dashboard
+- Navigated to **CloudWatch Console → Dashboards → Create dashboard**
+- Added widgets for: `CPUUtilization`, `mem_used_percent`, `disk_used_percent`, `NetworkIn`/`NetworkOut`
+
+
+
+### 6. Create a CloudWatch Alarm
+- Metric: `CPUUtilization`
+- Statistic: Average | Period: 5 minutes
+- Threshold: Greater than 80% for 3 consecutive datapoints (avoids false positives from brief spikes)
+
+
+
+### 7. Set Up the SNS Topic & Email Subscription
+```bash
+# Done via console:
+# SNS → Topics → Create topic → "infra-alerts" (Standard type)
+# SNS → Create subscription → Protocol: Email → confirmed via inbox link
+```
+
+
+
+### 8. Connect the Alarm to SNS
+- Alarm action on **"In alarm"** state → publish to `infra-alerts` SNS topic
+
+### 9. Test and Validate
+- Simulated CPU load using `stress` to trigger the alarm
+- Confirmed email notification was received within ~5 minutes
+
+
+
+
+
+## ✅ Outcome
+
+- Continuous visibility into EC2 health via CloudWatch Dashboards
+- Automated email alerts on sustained CPU threshold breaches, avoiding noisy single-spike false alarms
+- Extendable architecture — RDS and VPC metrics can be added the same way
+
+
+
+
+
+
+## 🧠 Key Concepts Demonstrated
+- CloudWatch Agent installation & custom metric collection (memory/disk beyond EC2 defaults)
+- CloudWatch Alarms with multi-datapoint thresholds to reduce alert fatigue
+- SNS topic/subscription model for notification fan-out
+- IAM least-privilege role scoping for the CloudWatch Agent
+- Real-world debugging of config file paths, typos, and missing dependencies
+
+---
+
